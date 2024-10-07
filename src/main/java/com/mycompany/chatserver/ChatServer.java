@@ -33,6 +33,8 @@ public class ChatServer {
             e.printStackTrace();
         }
     }
+    
+    
 
     // Xử lý việc tham gia nhóm
     public static void joinGroup(String groupName, ClientHandler client) {
@@ -71,6 +73,18 @@ public class ChatServer {
             groupMembers.remove(client);
         }
     }
+    
+    public static void sendPrivateMessage(String targetUsername, String message, ClientHandler sender) {
+    for (ClientHandler client : clientHandlers) {
+        if (client.getUsername().equals(targetUsername)) {
+            client.sendMessage(message); // Gửi tin nhắn cho client nhận
+            sender.sendMessage("Bạn đã gửi tin nhắn cho " + targetUsername + ": " + message); // Phản hồi cho người gửi
+            return;
+        }
+    }
+    // Nếu không tìm thấy người dùng
+    sender.sendMessage("Không tìm thấy người dùng với tên: " + targetUsername);
+}
 }
 
 class ClientHandler implements Runnable {
@@ -82,52 +96,64 @@ class ClientHandler implements Runnable {
     public ClientHandler(Socket socket) {
         this.socket = socket;
     }
+    
+    public String getClientIP() {
+    return socket.getInetAddress().getHostAddress();
+    }
+
 
     @Override
-    public void run() {
-        try {
-            in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            out = new PrintWriter(socket.getOutputStream(), true);
+public void run() {
+    try {
+        in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+        out = new PrintWriter(socket.getOutputStream(), true);
 
-            // Yêu cầu người dùng nhập tên
-            out.println("Enter your username:");
-            username = in.readLine();
+        // Yêu cầu người dùng nhập tên
+        out.println("Enter your username:");
+        username = in.readLine();
 
-            // Gửi thông báo chào mừng
-            out.println("Welcome " + username + "!");
-            ChatServer.broadcastToAll(username + " đã tham gia phòng chat.");
+        // Gửi thông báo chào mừng
+        out.println("Welcome " + username + "!");
+        ChatServer.broadcastToAll(username + " đã tham gia phòng chat.");
 
-            String message;
-            while ((message = in.readLine()) != null) {
-                if (message.startsWith("MSG:")) {
-                    // Xử lý tin nhắn toàn server
-                    String msgToBroadcast = username + ": " + message.substring(4);
-                    ChatServer.broadcastToAll(msgToBroadcast);
-                } else if (message.startsWith("JOIN:")) {
-                    // Xử lý tham gia nhóm
-                    String groupName = message.substring(5);
-                    ChatServer.joinGroup(groupName, this);
-                } else if (message.startsWith("GROUP:")) {
-                    // Xử lý tin nhắn nhóm
-                    String[] parts = message.split(":", 3); // GROUP:groupName:message
-                    String groupName = parts[1];
-                    String groupMessage = username + ": " + parts[2];
-                    ChatServer.broadcastToGroup(groupName, groupMessage);
-                }
-            }
-        } catch (IOException e) {
-            e.printStackTrace();
-        } finally {
-            // Xử lý khi client ngắt kết nối
-            try {
-                ChatServer.removeClient(this);
-                socket.close();
-                ChatServer.broadcastToAll(username + " đã rời khỏi phòng chat.");
-            } catch (IOException e) {
-                e.printStackTrace();
+        String message;
+        while ((message = in.readLine()) != null) {
+            if (message.startsWith("MSG:")) {
+                // Xử lý tin nhắn toàn server
+                String msgToBroadcast = username + " (" + getClientIP() + "): " + message.substring(4);
+                ChatServer.broadcastToAll(msgToBroadcast);
+            } else if (message.startsWith("JOIN:")) {
+                // Xử lý tham gia nhóm
+                String groupName = message.substring(5);
+                ChatServer.joinGroup(groupName, this);
+            } else if (message.startsWith("GROUP:")) {
+                // Xử lý tin nhắn nhóm
+                String[] parts = message.split(":", 3); // GROUP:groupName:message
+                String groupName = parts[1];
+                String groupMessage = username + " (" + getClientIP() + "): " + parts[2];
+                ChatServer.broadcastToGroup(groupName, groupMessage);
+            } else if (message.startsWith("PRIVATE:")) {
+                // Xử lý tin nhắn riêng
+                String[] parts = message.split(":", 3); // PRIVATE:targetUsername:message
+                String targetUsername = parts[1];
+                String privateMessage = parts[2];
+                ChatServer.sendPrivateMessage(targetUsername, username + " (" + getClientIP() + ") (tin nhắn riêng): " + privateMessage, this);
             }
         }
+    } catch (IOException e) {
+        e.printStackTrace();
+    } finally {
+        // Xử lý khi client ngắt kết nối
+        try {
+            ChatServer.removeClient(this);
+            socket.close();
+            ChatServer.broadcastToAll(username + " đã rời khỏi phòng chat.");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
+}
+
 
     public String getUsername() {
         return username;
