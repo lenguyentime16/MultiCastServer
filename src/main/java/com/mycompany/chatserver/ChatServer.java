@@ -65,10 +65,29 @@ public class ChatServer {
     // Xử lý khi một client rời khỏi server
     public static void removeClient(ClientHandler client) {
         clientHandlers.remove(client);
-        
+
         // Xóa client khỏi tất cả các nhóm
         for (Set<ClientHandler> groupMembers : groupMap.values()) {
             groupMembers.remove(client);
+        }
+    }
+
+    // Bổ sung một phương thức để gửi danh sách các client đang kết nối
+    public static Set<String> getActiveClients() {
+        Set<String> activeClients = new HashSet<>();
+        for (ClientHandler client : clientHandlers) {
+            activeClients.add(client.getUsername());
+        }
+        return activeClients;
+    }
+
+    // Phương thức để gửi tin nhắn riêng
+    public static void sendPrivateMessage(String sender, String receiver, String message) {
+        for (ClientHandler client : clientHandlers) {
+            if (client.getUsername().equals(receiver)) {
+                client.sendMessage("[Tin nhắn riêng từ " + sender + "]: " + message);
+                break;
+            }
         }
     }
 }
@@ -97,6 +116,8 @@ class ClientHandler implements Runnable {
             out.println("Welcome " + username + "!");
             ChatServer.broadcastToAll(username + " đã tham gia phòng chat.");
 
+            listActiveClients();
+
             String message;
             while ((message = in.readLine()) != null) {
                 if (message.startsWith("MSG:")) {
@@ -113,6 +134,12 @@ class ClientHandler implements Runnable {
                     String groupName = parts[1];
                     String groupMessage = username + ": " + parts[2];
                     ChatServer.broadcastToGroup(groupName, groupMessage);
+                } else if (message.startsWith("PRIVATE:")) {
+                    // Xử lý tin nhắn riêng
+                    String[] parts = message.split(":", 3); // PRIVATE:receiver:message
+                    String receiver = parts[1];
+                    String privateMessage = parts[2];
+                    ChatServer.sendPrivateMessage(username, receiver, privateMessage);
                 }
             }
         } catch (IOException e) {
@@ -136,8 +163,12 @@ class ClientHandler implements Runnable {
     public void sendMessage(String message) {
         out.println(message);
     }
+
+    private void listActiveClients() {
+        Set<String> activeClients = ChatServer.getActiveClients();
+        out.println("Danh sách các client đang kết nối:");
+        for (String client : activeClients) {
+            out.println("- " + client);
+        }
+    }
 }
-
-
-
-
